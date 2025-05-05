@@ -1,16 +1,22 @@
 #!/bin/sh
 set -e
 
-# Init certificate request
-if [ ! -f /etc/letsencrypt/live/ananyahospital.com/fullchain.pem ]; then
-    certbot certonly --nginx \
-        -d ananyahospital.com \
-        -d www.ananyahospital.com \
-        --non-interactive \
-        --agree-tos \
-        --email your-email@example.com \
-        --keep-until-expiring
-fi
+# Directories
+CONFIG_DIR="/etc/letsencrypt"
+WORK_DIR="/var/lib/letsencrypt"
+LOG_DIR="/var/log/letsencrypt"
 
-# Regular renewal
-certbot renew --quiet --nginx
+# Renew certificates
+echo "Renewing SSL certificates..."
+certbot renew --nginx \
+    --non-interactive \
+    --agree-tos \
+    --config-dir "$CONFIG_DIR" \
+    --work-dir "$WORK_DIR" \
+    --logs-dir "$LOG_DIR"
+
+# Reload nginx to apply new certificates
+if [ -f /var/run/nginx/nginx.pid ]; then
+    echo "Reloading nginx..."
+    nginx -s reload
+fi
