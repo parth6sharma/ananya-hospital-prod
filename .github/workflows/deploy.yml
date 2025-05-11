@@ -8,9 +8,9 @@ on:
     branches: [uat,main]
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: ${{ secrets.GCP_REPO_REGION }}  
+  REGION: ${{ secrets.GCP_REPO_REGION }}
   REPOSITORY: ananya-hospital  # Your Artifact Registry repository name
-  IMAGE_NAME: ${{env.REGION }}-docker.pkg.dev/${{env.PROJECT_ID }}/${{env.REPOSITORY }}/ananya-hospital
+  IMAGE_NAME: ${{ secrets.GCP_REPO_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ananya-hospital/ananya-hospital
   INSTANCE_NAME: ${{ secrets.GCP_INSTANCE_NAME }}
   ZONE: ${{ secrets.GCP_ZONE }}
 
