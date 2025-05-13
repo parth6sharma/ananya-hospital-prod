@@ -175,4 +175,5 @@ cython_debug/
 *.crt
 *.key
 *.pem
-*.json
+*.txt
+
