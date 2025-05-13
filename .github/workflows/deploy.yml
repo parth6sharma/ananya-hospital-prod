@@ -1,0 +1,80 @@
+name: Build and Deploy to GCP (UAT)
+
+on:
+  pull_request:
+    branches: [ uat ]
+    types: [closed]
+  push:
+    branches: [uat,main]
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REPO_REGION }}
+  REPOSITORY: ananya-hospital  # Your Artifact Registry repository name
+  IMAGE_NAME: ${{ secrets.GCP_REPO_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ananya-hospital/ananya-hospital
+  INSTANCE_NAME: ${{ secrets.GCP_INSTANCE_NAME }}
+  ZONE: ${{ secrets.GCP_ZONE }}
+
+jobs:
+  build-deploy:
+    if: github.event.pull_request.merged == true
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Set up GCP credentials
+      id: gcp-creds
+      run: |
+        echo "${{ secrets.GCP_SA_KEY }}" | base64 -d > gcp_credentials.json
+        echo "GCP_CREDS_FILE=$(pwd)/gcp_credentials.json" >> $GITHUB_ENV
+    
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v0
+      with:
+        project_id: ${{ env.PROJECT_ID }}
+        service_account_key: ${{ env.GCP_CREDS_FILE }}
+        export_default_credentials: true
+
+    - name: Authenticate Docker to Artifact Registry
+      run: |
+        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+    - name: Create SSL directory and certificates
+      run: |
+        mkdir -p dev-certs
+        echo "${{ secrets.SSL_CERT }}" | base64 -d > dev-certs/server.crt
+        echo "${{ secrets.SSL_KEY }}" | base64 -d > dev-certs/server.key
+        chmod 644 dev-certs/server.crt
+        chmod 600 dev-certs/server.key
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v3
+      with:
+        push: true
+        tags: |
+          ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          ${{ env.IMAGE_NAME }}:uat-latest
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Deploy to GCP Compute Engine
+      run: |
+        gcloud compute instances update-container ${{ env.INSTANCE_NAME }} \
+          --zone ${{ env.ZONE }} \
+          --container-image ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+    - name: Reboot Compute Engine Instance
+      run: |
+        gcloud compute instances reset ${{ env.INSTANCE_NAME }} --zone ${{ env.ZONE }} --quiet
+      if: always()
+
+    - name: Remove GCP credentials
+      run: rm -f ${{ env.GCP_CREDS_FILE }}
+      if: always()
